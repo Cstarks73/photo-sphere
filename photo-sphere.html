@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Photo Sphere</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            color: white;
+            transition: opacity 0.3s;
+            max-width: 350px;
+        }
+        
+        #controls.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        #controls h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: #fff;
+            font-size: 18px;
+        }
+        
+        #fileInput {
+            display: block;
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        #fileInput:hover {
+            background: #444;
+        }
+        
+        .button-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+        
+        .button {
+            flex: 1;
+            min-width: 100px;
+            padding: 10px 12px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+            font-size: 12px;
+            text-align: center;
+        }
+        
+        .button:hover {
+            background: #45a049;
+        }
+        
+        .button.secondary {
+            background: #2196F3;
+        }
+        
+        .button.secondary:hover {
+            background: #1976D2;
+        }
+        
+        .button.recording {
+            background: #f44336;
+            animation: pulse 1.5s infinite;
+        }
+        
+        .button.recording:hover {
+            background: #d32f2f;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        
+        #imageCount {
+            margin-top: 5px;
+            font-size: 12px;
+            color: #aaa;
+        }
+        
+        .speed-control {
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .speed-control label {
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        
+        .speed-control input[type="range"] {
+            flex: 1;
+            min-width: 100px;
+        }
+        
+        .speed-value {
+            font-size: 12px;
+            color: #4CAF50;
+            min-width: 35px;
+        }
+        
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #selectedImage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 90%;
+            max-height: 90%;
+            border: 5px solid white;
+            border-radius: 15px;
+            box-shadow: 0 0 50px rgba(255, 255, 255, 0.5);
+            display: none;
+            z-index: 200;
+            cursor: pointer;
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+        
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+            to {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.8);
+            }
+        }
+        
+        #selectedImage.hiding {
+            animation: fadeOut 0.3s ease-out;
+        }
+        
+        .auto-preview {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 60%;
+            max-height: 60%;
+            border: 3px solid rgba(255, 255, 255, 0.8);
+            border-radius: 12px;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.4);
+            z-index: 150;
+            pointer-events: none;
+            animation: autoPreview 0.5s ease-out;
+        }
+        
+        @keyframes autoPreview {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.5);
+            }
+            20% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+            80% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.5);
+            }
+        }
+        
+        @media (max-width: 480px) {
+            #controls {
+                padding: 10px;
+            }
+            
+            #controls h3 {
+                font-size: 16px;
+            }
+            
+            .button {
+                font-size: 11px;
+                padding: 8px 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <h3>3D Photo Sphere</h3>
+        <input type="file" id="fileInput" multiple accept="image/*">
+        <div class="button-container">
+            <button class="button" onclick="toggleBackground()">Toggle BG</button>
+            <button class="button secondary" onclick="resetSphere()">Reset</button>
+            <button class="button" id="recordButton" onclick="toggleRecording()">Record</button>
+        </div>
+        <div class="speed-control">
+            <label>Speed:</label>
+            <input type="range" id="speedSlider" min="0" max="200" value="100" oninput="updateSpeed(this.value)">
+            <span class="speed-value" id="speedValue">100%</span>
+        </div>
+        <div class="speed-control">
+            <label>Size:</label>
+            <input type="range" id="sizeSlider" min="50" max="200" value="100" oninput="updateSphereSize(this.value)">
+            <span class="speed-value" id="sizeValue">100%</span>
+        </div>
+        <div class="speed-control">
+            <label>Preview:</label>
+            <input type="range" id="previewSlider" min="5" max="60" value="15" oninput="updatePreviewTiming(this.value)">
+            <span class="speed-value" id="previewValue">15s</span>
+        </div>
+        <div id="imageCount">Images loaded: 0</div>
+    </div>
+    
+    <canvas id="canvas"></canvas>
+    <img id="selectedImage" onclick="hideSelectedImage()">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        let scene, camera, renderer, raycaster, mouse;
+        let photoSphere;
+        let photos = [];
+        let photoMeshes = [];
+        let backgroundType = 'space';
+        let starField;
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+        let sphereRotation = { x: 0, y: 0 };
+        let rotationVelocity = { x: 0, y: 0 };
+        let baseRotationSpeed = 0.005;
+        let speedMultiplier = 1.0;
+        let controlsVisible = true;
+        let lastInteractionTime = Date.now();
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let isRecording = false;
+        let lastClickTime = 0;
+        let lastClickTarget = null;
+        let autoPreviewInterval = null;
+        let lastAutoPreviewTime = 0;
+        let sphereSizeMultiplier = 1.0;
+        let previewIntervalSeconds = 15;
+        
+        // Initialize Three.js
+        function init() {
+            scene = new THREE.Scene();
+            
+            camera = new THREE.PerspectiveCamera(
+                75,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                1000
+            );
+            camera.position.z = 5;
+            
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: document.getElementById('canvas'),
+                antialias: true,
+                preserveDrawingBuffer: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+            directionalLight.position.set(5, 5, 5);
+            scene.add(directionalLight);
+            
+            // Additional light for better photo visibility
+            const pointLight = new THREE.PointLight(0xffffff, 0.3);
+            pointLight.position.set(-5, -5, -5);
+            scene.add(pointLight);
+            
+            // Raycaster for click detection
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+            
+            // Create star field background
+            createStarField();
+            
+            // Create empty photo sphere group
+            photoSphere = new THREE.Group();
+            scene.add(photoSphere);
+            
+            // Event listeners
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('click', onMouseClick);
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mousedown', onMouseDown);
+            window.addEventListener('mouseup', onMouseUp);
+            window.addEventListener('touchstart', onTouchStart, { passive: false });
+            window.addEventListener('touchmove', onTouchMove, { passive: false });
+            window.addEventListener('touchend', onTouchEnd);
+            
+            // Start auto preview interval
+            startAutoPreview();
+            
+            animate();
+        }
+        
+        function createStarField() {
+            const geometry = new THREE.BufferGeometry();
+            const vertices = [];
+            
+            for (let i = 0; i < 10000; i++) {
+                vertices.push(
+                    (Math.random() - 0.5) * 2000,
+                    (Math.random() - 0.5) * 2000,
+                    (Math.random() - 0.5) * 2000
+                );
+            }
+            
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: 2,
+                sizeAttenuation: true
+            });
+            
+            starField = new THREE.Points(geometry, material);
+            scene.add(starField);
+        }
+        
+        function startAutoPreview() {
+            if (autoPreviewInterval) {
+                clearInterval(autoPreviewInterval);
+            }
+            
+            autoPreviewInterval = setInterval(() => {
+                if (photoMeshes.length > 0 && !isDragging && document.getElementById('selectedImage').style.display !== 'block') {
+                    const now = Date.now();
+                    if (now - lastAutoPreviewTime > 1000) { // Ensure at least 1 second between previews
+                        const randomIndex = Math.floor(Math.random() * photoMeshes.length);
+                        const photo = photoMeshes[randomIndex];
+                        showAutoPreview(photo.userData.imageUrl);
+                        lastAutoPreviewTime = now;
+                    }
+                }
+            }, previewIntervalSeconds * 1000); // Convert seconds to milliseconds
+        }
+        
+        function showAutoPreview(imageUrl) {
+            const preview = document.createElement('img');
+            preview.src = imageUrl;
+            preview.className = 'auto-preview';
+            document.body.appendChild(preview);
+            
+            setTimeout(() => {
+                document.body.removeChild(preview);
+            }, 1200);
+        }
+        
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            
+            if (isDragging) {
+                const deltaMove = {
+                    x: event.clientX - previousMousePosition.x,
+                    y: event.clientY - previousMousePosition.y
+                };
+                
+                // Update rotation velocity based on drag speed
+                rotationVelocity.x = deltaMove.y * 0.001;
+                rotationVelocity.y = deltaMove.x * 0.001;
+                
+                sphereRotation.y += deltaMove.x * 0.01;
+                sphereRotation.x += deltaMove.y * 0.01;
+                
+                // Limit vertical rotation
+                sphereRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, sphereRotation.x));
+                
+                previousMousePosition = {
+                    x: event.clientX,
+                    y: event.clientY
+                };
+                
+                lastInteractionTime = Date.now();
+            }
+        }
+        
+        function onMouseDown(event) {
+            // Check if clicking on controls
+            const controls = document.getElementById('controls');
+            const rect = controls.getBoundingClientRect();
+            if (event.clientX >= rect.left && event.clientX <= rect.right &&
+                event.clientY >= rect.top && event.clientY <= rect.bottom) {
+                return;
+            }
+            
+            isDragging = true;
+            previousMousePosition = {
+                x: event.clientX,
+                y: event.clientY
+            };
+            rotationVelocity = { x: 0, y: 0 };
+        }
+        
+        function onMouseUp(event) {
+            isDragging = false;
+        }
+        
+        function onTouchStart(event) {
+            // Check if touching controls
+            const touch = event.touches[0];
+            const controls = document.getElementById('controls');
+            const rect = controls.getBoundingClientRect();
+            if (touch.clientX >= rect.left && touch.clientX <= rect.right &&
+                touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
+                return;
+            }
+            
+            if (event.touches.length === 1) {
+                isDragging = true;
+                previousMousePosition = {
+                    x: touch.clientX,
+                    y: touch.clientY
+                };
+                rotationVelocity = { x: 0, y: 0 };
+                
+                // Update mouse position for double-tap detection
+                mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+            }
+        }
+        
+        function onTouchMove(event) {
+            if (isDragging && event.touches.length === 1) {
+                event.preventDefault();
+                
+                const touch = event.touches[0];
+                const deltaMove = {
+                    x: touch.clientX - previousMousePosition.x,
+                    y: touch.clientY - previousMousePosition.y
+                };
+                
+                // Update rotation velocity
+                rotationVelocity.x = deltaMove.y * 0.001;
+                rotationVelocity.y = deltaMove.x * 0.001;
+                
+                sphereRotation.y += deltaMove.x * 0.01;
+                sphereRotation.x += deltaMove.y * 0.01;
+                
+                // Limit vertical rotation
+                sphereRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, sphereRotation.x));
+                
+                previousMousePosition = {
+                    x: touch.clientX,
+                    y: touch.clientY
+                };
+                
+                // Update mouse position for raycaster
+                mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+                
+                lastInteractionTime = Date.now();
+            }
+        }
+        
+        function onTouchEnd(event) {
+            isDragging = false;
+            
+            // Handle double-tap
+            if (event.changedTouches.length === 1) {
+                const touch = event.changedTouches[0];
+                mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+                
+                const currentTime = Date.now();
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(photoSphere.children);
+                
+                if (intersects.length > 0) {
+                    const clickedObject = intersects[0].object;
+                    if (currentTime - lastClickTime < 300 && lastClickTarget === clickedObject) {
+                        // Double tap detected
+                        if (clickedObject.userData.imageUrl) {
+                            showSelectedImage(clickedObject.userData.imageUrl);
+                        }
+                    }
+                    lastClickTarget = clickedObject;
+                } else {
+                    // Toggle controls on empty space double-tap
+                    if (currentTime - lastClickTime < 300) {
+                        controlsVisible = !controlsVisible;
+                        document.getElementById('controls').classList.toggle('hidden', !controlsVisible);
+                    }
+                }
+                lastClickTime = currentTime;
+            }
+        }
+        
+        function onMouseClick(event) {
+            // Check if clicking on controls
+            const controls = document.getElementById('controls');
+            const rect = controls.getBoundingClientRect();
+            if (event.clientX >= rect.left && event.clientX <= rect.right &&
+                event.clientY >= rect.top && event.clientY <= rect.bottom) {
+                return;
+            }
+            
+            // Check if image is currently displayed
+            const selectedImage = document.getElementById('selectedImage');
+            if (selectedImage.style.display === 'block') {
+                return;
+            }
+            
+            const currentTime = Date.now();
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(photoSphere.children);
+            
+            if (intersects.length > 0) {
+                const clickedObject = intersects[0].object;
+                
+                // Check for double-click
+                if (currentTime - lastClickTime < 300 && lastClickTarget === clickedObject) {
+                    if (clickedObject.userData.imageUrl) {
+                        showSelectedImage(clickedObject.userData.imageUrl);
+                    }
+                }
+                lastClickTarget = clickedObject;
+            } else {
+                // Toggle controls on empty space
+                controlsVisible = !controlsVisible;
+                controls.classList.toggle('hidden', !controlsVisible);
+            }
+            
+            lastClickTime = currentTime;
+        }
+        
+        function showSelectedImage(imageUrl) {
+            const img = document.getElementById('selectedImage');
+            img.src = imageUrl;
+            img.style.display = 'block';
+            img.classList.remove('hiding');
+        }
+        
+        function hideSelectedImage() {
+            const img = document.getElementById('selectedImage');
+            img.classList.add('hiding');
+            setTimeout(() => {
+                img.style.display = 'none';
+                img.classList.remove('hiding');
+            }, 300);
+        }
+        
+        function createPhotoSphere() {
+            // Clear existing photos
+            while (photoSphere.children.length > 0) {
+                photoSphere.remove(photoSphere.children[0]);
+            }
+            photoMeshes = [];
+            
+            const radius = 2 * sphereSizeMultiplier;
+            const numPhotos = photos.length;
+            
+            if (numPhotos === 0) return;
+            
+            // Calculate positions on sphere
+            const goldenRatio = (1 + Math.sqrt(5)) / 2;
+            const angleIncrement = Math.PI * 2 * goldenRatio;
+            
+            photos.forEach((photo, index) => {
+                const y = 1 - (index / (numPhotos - 1)) * 2;
+                const radiusAtY = Math.sqrt(1 - y * y);
+                const theta = angleIncrement * index;
+                
+                const x = Math.cos(theta) * radiusAtY * radius;
+                const z = Math.sin(theta) * radiusAtY * radius;
+                const yPos = y * radius;
+                
+                // Create texture from image
+                const texture = new THREE.TextureLoader().load(photo.url);
+                texture.minFilter = THREE.LinearFilter;
+                
+                // Create simple plane geometry
+                const geometry = new THREE.PlaneGeometry(0.6 * sphereSizeMultiplier, 0.6 * sphereSizeMultiplier);
+                
+                const material = new THREE.MeshBasicMaterial({ 
+                    map: texture,
+                    side: THREE.DoubleSide
+                });
+                
+                const photoMesh = new THREE.Mesh(geometry, material);
+                photoMesh.position.set(x, yPos, z);
+                photoMesh.lookAt(0, 0, 0);
+                photoMesh.userData.imageUrl = photo.url;
+                
+                photoSphere.add(photoMesh);
+                photoMeshes.push(photoMesh);
+            });
+            
+            updateImageCount();
+        }
+        
+        function updateImageCount() {
+            document.getElementById('imageCount').textContent = `Images loaded: ${photos.length}`;
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (photoSphere) {
+                // Apply continuous rotation with momentum
+                if (!isDragging) {
+                    // Add base rotation
+                    sphereRotation.y += baseRotationSpeed * speedMultiplier;
+                    sphereRotation.x += baseRotationSpeed * 0.4 * speedMultiplier;
+                    
+                    // Apply and dampen velocity
+                    sphereRotation.x += rotationVelocity.x;
+                    sphereRotation.y += rotationVelocity.y;
+                    
+                    rotationVelocity.x *= 0.95;
+                    rotationVelocity.y *= 0.95;
+                }
+                
+                // Limit vertical rotation
+                sphereRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, sphereRotation.x));
+                
+                // Apply rotation
+                photoSphere.rotation.y = sphereRotation.y;
+                photoSphere.rotation.x = sphereRotation.x;
+            }
+            
+            if (starField && backgroundType === 'space') {
+                starField.rotation.y += 0.0002;
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+        function toggleBackground() {
+            if (backgroundType === 'space') {
+                backgroundType = 'clear';
+                scene.remove(starField);
+                scene.background = null;
+                renderer.setClearColor(0xf0f0f0, 1);
+            } else {
+                backgroundType = 'space';
+                scene.add(starField);
+                scene.background = new THREE.Color(0x000000);
+                renderer.setClearColor(0x000000, 1);
+            }
+        }
+        
+        function resetSphere() {
+            photos = [];
+            createPhotoSphere();
+            hideSelectedImage();
+            sphereRotation = { x: 0, y: 0 };
+            rotationVelocity = { x: 0, y: 0 };
+            sphereSizeMultiplier = 1.0;
+            previewIntervalSeconds = 15;
+            // Reset sliders
+            document.getElementById('sizeSlider').value = 100;
+            document.getElementById('sizeValue').textContent = '100%';
+            document.getElementById('previewSlider').value = 15;
+            document.getElementById('previewValue').textContent = '15s';
+            camera.position.z = 5;
+        }
+        
+        function updateSpeed(value) {
+            speedMultiplier = value / 100;
+            document.getElementById('speedValue').textContent = value + '%';
+        }
+        
+        function updateSphereSize(value) {
+            sphereSizeMultiplier = value / 100;
+            document.getElementById('sizeValue').textContent = value + '%';
+            // Recreate sphere with new size
+            createPhotoSphere();
+            
+            // Adjust camera position based on size - using a better formula
+            const baseDistance = 5;
+            const minDistance = 3;
+            const maxDistance = 10;
+            const newDistance = Math.min(maxDistance, Math.max(minDistance, baseDistance * Math.sqrt(sphereSizeMultiplier)));
+            camera.position.z = newDistance;
+        }
+        
+        function updatePreviewTiming(value) {
+            previewIntervalSeconds = parseInt(value);
+            document.getElementById('previewValue').textContent = value + 's';
+            // Restart auto preview with new timing
+            startAutoPreview();
+        }
+        
+        function toggleRecording() {
+            const recordButton = document.getElementById('recordButton');
+            
+            if (!isRecording) {
+                startRecording();
+                recordButton.textContent = 'Stop';
+                recordButton.classList.add('recording');
+            } else {
+                stopRecording();
+                recordButton.textContent = 'Record';
+                recordButton.classList.remove('recording');
+            }
+        }
+        
+        function startRecording() {
+            recordedChunks = [];
+            
+            // Hide controls during recording for clean video
+            const controls = document.getElementById('controls');
+            controls.style.display = 'none';
+            
+            // Get canvas stream
+            const canvas = document.getElementById('canvas');
+            const stream = canvas.captureStream(30); // 30 FPS
+            
+            // Set up media recorder with video/webm format
+            const options = {
+                mimeType: 'video/webm;codecs=vp9',
+                videoBitsPerSecond: 5000000 // 5 Mbps
+            };
+            
+            // Fallback for browsers that don't support vp9
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                options.mimeType = 'video/webm';
+            }
+            
+            mediaRecorder = new MediaRecorder(stream, options);
+            
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    recordedChunks.push(event.data);
+                }
+            };
+            
+            mediaRecorder.onstop = () => {
+                // Show controls again
+                controls.style.display = 'block';
+                
+                // Create video blob
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                
+                // Download the video
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `photo-sphere-${Date.now()}.webm`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                // Note to user about conversion
+                if (window.innerWidth <= 768) {
+                    alert('Video saved! To convert to MP4, use apps like VLC or online converters.');
+                } else {
+                    alert('Video saved as WebM format. To convert to MP4, you can use online converters like CloudConvert, or desktop software like VLC or HandBrake.');
+                }
+            };
+            
+            mediaRecorder.start();
+            isRecording = true;
+        }
+        
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                isRecording = false;
+            }
+        }
+        
+        // File input handler
+        document.getElementById('fileInput').addEventListener('change', function(event) {
+            const files = event.target.files;
+            photos = []; // Reset photos array
+            
+            let loadedCount = 0;
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    photos.push({
+                        url: e.target.result,
+                        name: file.name
+                    });
+                    
+                    loadedCount++;
+                    if (loadedCount === files.length) {
+                        createPhotoSphere();
+                    }
+                };
+                
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        // Initialize the scene
+        init();
+    </script>
+</body>
+</html>
